@@ -11,3 +11,5 @@ Usage: `./git-mirror-bundle.sh --remote <URL>`
 > etc.) and sets up a refspec configuration such that all these refs are overwritten by a `git remote update` in the 
 > target repository.
 
+2. Bundle repository using [--all](https://git-scm.com/docs/git-bundle)
+> If you want to match `git clone --mirror`, which would include your refs such as `refs/remotes/*`, use `--all`.

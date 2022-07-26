@@ -25,3 +25,9 @@ cd $TMP
 
 echo "Cloning ${REPO} into $(pwd)"
 git clone --mirror ${REMOTE} "${REPO}"
+
+cd "${REPO}"
+BUNDLE="${REPO}.bundle"
+git bundle create "${BUNDLE}" --all
+
+echo "bundle $(realpath ${BUNDLE})"
