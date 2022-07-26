@@ -20,4 +20,8 @@ fi
 
 REPO=$(basename ${REMOTE} ".git")
 
+TMP=$(mktemp -d -t 'git-mirror-bundle.XXXXXXXXXX')
+cd $TMP
+
+echo "Cloning ${REPO} into $(pwd)"
 git clone --mirror ${REMOTE} "${REPO}"
