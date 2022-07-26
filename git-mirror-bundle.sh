@@ -1,11 +1,13 @@
 #!/bin/zsh
 
 # We use "$@" instead of $* to preserve argument-boundary information
-ARGS=$(getopt -o 'r:' --long 'remote:' -- "$@") || exit
+ARGS=$(getopt -o 'g:r:' --long 'gstorage:,remote:' -- "$@") || exit
 eval "set -- $ARGS"
 
 while true; do
     case $1 in
+      (-g|--gstorage)
+            GSTORAGE=$2; shift 2;;
       (-r|--remote)
             REMOTE=$2; shift 2;;
       (--)  shift; break;;
@@ -30,4 +32,13 @@ cd "${REPO}"
 BUNDLE="${REPO}.bundle"
 git bundle create "${BUNDLE}" --all
 
-echo "bundle $(realpath ${BUNDLE})"
+BUNDLE_FILE=$(realpath ${BUNDLE})
+echo "bundle ${BUNDLE_FILE}"
+
+ARCHIVE_FILE="${BUNDLE_FILE}.gz"
+gzip -9 "${BUNDLE_FILE}"
+echo "archived ${ARCHIVE_FILE}"
+
+if [ "$GSTORAGE" ]; then
+   gsutil mv "${ARCHIVE_FILE}" "${GSTORAGE}"
+fi

@@ -13,3 +13,7 @@ Usage: `./git-mirror-bundle.sh --remote <URL>`
 
 2. Bundle repository using [--all](https://git-scm.com/docs/git-bundle)
 > If you want to match `git clone --mirror`, which would include your refs such as `refs/remotes/*`, use `--all`.
+
+3. Upload to Google Storage (optional)
+
+Usage: `./git-mirror-bundle.sh --remote <URL> --gstorage <PREFIX>`
