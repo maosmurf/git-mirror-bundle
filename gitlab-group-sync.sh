@@ -116,6 +116,11 @@ for i in "${!REPOS[@]}"; do
     mkdir -p "$(dirname "$dest")"
 
     if [[ -d "${dest}/.git" ]]; then
+        remote_url=$(git -C "$dest" remote get-url origin 2>/dev/null || echo "")
+        if [[ "$remote_url" == https://* ]]; then
+            echo -e "  WARN: ${rel_path} remote is HTTPS — skipping (change to SSH with: git -C \"${dest}\" remote set-url origin ${url})"
+            continue
+        fi
         echo -e "[${n}/${TOTAL}] ${PURPLE}fetch${RESET} ${rel_path}${archived_label}"
         if $DRY_RUN; then
             fetch_output=$(git -C "$dest" fetch --all --dry-run 2>&1) || { echo "  WARN: fetch dry-run failed"; (( ERRORS++ )) || true; }
