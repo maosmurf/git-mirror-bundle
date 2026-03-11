@@ -70,7 +70,16 @@ for i in "${!REPOS[@]}"; do
 
     if [[ -d "${dest}/.git" ]]; then
         echo -e "[${n}/${TOTAL}] ${PURPLE}fetch${RESET} ${name}${archived_label}"
-        $DRY_RUN || git -C "$dest" fetch --all $QUIET_FLAG || { echo "  WARN: fetch failed, skipping"; (( ERRORS++ )) || true; }
+        if $DRY_RUN; then
+            fetch_output=$(git -C "$dest" fetch --all --dry-run 2>&1) || { echo "  WARN: fetch dry-run failed"; (( ERRORS++ )) || true; }
+            if [[ -z "$fetch_output" ]]; then
+                echo "  (up to date)"
+            else
+                echo "$fetch_output" | sed 's/^/  /'
+            fi
+        else
+            git -C "$dest" fetch --all $QUIET_FLAG || { echo "  WARN: fetch failed, skipping"; (( ERRORS++ )) || true; }
+        fi
     else
         size=$(numfmt --to=si --from-unit=1024 "$disk_kb" 2>/dev/null || echo "? KB")
         echo -e "[${n}/${TOTAL}] ${GREEN}clone${RESET} ${name} (~${size})${archived_label}"
