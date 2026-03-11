@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: ./github-org-sync.sh <org> [target-dir]
+# Usage: ./github-org-sync.sh <org> [target-dir] [--dry-run]
 # Requires: gh CLI (https://cli.github.com/) authenticated with `gh auth login`
 
-ORG="${1:?Usage: $0 <github-org> [target-dir]}"
+ORG="${1:?Usage: $0 <github-org> [target-dir] [--dry-run]}"
 TARGET_DIR="${2:-./providers}"
+DRY_RUN=false
+[[ "${*}" == *--dry-run* ]] && DRY_RUN=true
 
 mkdir -p "$TARGET_DIR"
 
@@ -37,6 +39,7 @@ if [[ "$TOTAL" -eq 0 ]]; then
     exit 1
 fi
 
+$DRY_RUN && echo "[DRY RUN] No changes will be made."
 echo "Found ${TOTAL} repos → ${TARGET_DIR}/"
 echo ""
 
@@ -53,11 +56,11 @@ for i in "${!REPOS[@]}"; do
     n=$((i + 1))
 
     if [[ -d "${dest}/.git" ]]; then
-        echo "[${n}/${TOTAL}] pull  ${name}"
-        git -C "$dest" fetch --all --quiet || { echo "  WARN: fetch failed, skipping"; (( ERRORS++ )) || true; }
+        echo "[${n}/${TOTAL}] fetch ${name}"
+        $DRY_RUN || git -C "$dest" fetch --all --quiet || { echo "  WARN: fetch failed, skipping"; (( ERRORS++ )) || true; }
     else
         echo "[${n}/${TOTAL}] clone ${name}"
-        git clone --quiet "$url" "$dest" || { echo "  WARN: clone failed"; (( ERRORS++ )) || true; }
+        $DRY_RUN || git clone --quiet "$url" "$dest" || { echo "  WARN: clone failed"; (( ERRORS++ )) || true; }
     fi
 done
 
