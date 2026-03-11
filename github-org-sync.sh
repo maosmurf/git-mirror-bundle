@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: ./github-org-sync.sh <org> [target-dir] [--dry-run] [--include-archived]
+# Usage: ./github-org-sync.sh <org> [target-dir] [--dry-run] [--include-archived] [-q|--quiet]
 # Requires: gh CLI (https://cli.github.com/) authenticated with `gh auth login`
 
 ORG="${1:?Usage: $0 <github-org> [target-dir] [--dry-run]}"
@@ -10,6 +10,8 @@ DRY_RUN=false
 [[ "${*}" == *--dry-run* ]] && DRY_RUN=true
 INCLUDE_ARCHIVED=false
 [[ "${*}" == *--include-archived* ]] && INCLUDE_ARCHIVED=true
+QUIET_FLAG=""
+[[ "${*}" == *--quiet* || "${*}" == *\ -q* ]] && QUIET_FLAG="--quiet"
 
 GREEN='\033[0;32m'
 PURPLE='\033[0;35m'
@@ -65,10 +67,10 @@ for i in "${!REPOS[@]}"; do
 
     if [[ -d "${dest}/.git" ]]; then
         echo -e "[${n}/${TOTAL}] ${PURPLE}fetch${RESET} ${name}"
-        $DRY_RUN || git -C "$dest" fetch --all --quiet || { echo "  WARN: fetch failed, skipping"; (( ERRORS++ )) || true; }
+        $DRY_RUN || git -C "$dest" fetch --all $QUIET_FLAG || { echo "  WARN: fetch failed, skipping"; (( ERRORS++ )) || true; }
     else
         echo -e "[${n}/${TOTAL}] ${GREEN}clone${RESET} ${name}"
-        $DRY_RUN || git clone --quiet "$url" "$dest" || { echo "  WARN: clone failed"; (( ERRORS++ )) || true; }
+        $DRY_RUN || git clone $QUIET_FLAG "$url" "$dest" || { echo "  WARN: clone failed"; (( ERRORS++ )) || true; }
     fi
 done
 
