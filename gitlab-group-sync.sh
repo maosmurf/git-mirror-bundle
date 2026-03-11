@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: ./gitlab-group-sync.sh <group> [target-dir] [--dry-run] [--archived] [-q|--quiet] [--host <host>] [--token <token>]
+# Usage: ./gitlab-group-sync.sh <group> [target-dir] [--dry-run] [--archived] [-q|--quiet] [--host <host>] [--gitlab-token <token>|--onepw-token-ref <op://vault/item/field>]
 # Requires: curl, jq, git
-# Auth: GITLAB_TOKEN env var or --token flag
 
 GROUP="${1:?Usage: $0 <gitlab-group> [target-dir] [--dry-run] [--archived] [-q|--quiet]}"
 TARGET_DIR="${2:-./providers}"
@@ -15,17 +14,18 @@ QUIET_FLAG=""
 [[ "${*}" == *--quiet* || "${*}" == *\ -q* ]] && QUIET_FLAG="--quiet"
 
 GITLAB_HOST="gitlab.com"
-TOKEN="${GITLAB_TOKEN:-}"
+TOKEN=""
 args=("$@")
 for i in "${!args[@]}"; do
     case "${args[$i]}" in
-        --host)  GITLAB_HOST="${args[$((i+1))]}" ;;
-        --token) TOKEN="${args[$((i+1))]}" ;;
+        --host)           GITLAB_HOST="${args[$((i+1))]}" ;;
+        --gitlab-token)   TOKEN="${args[$((i+1))]}" ;;
+        --onepw-token-ref) TOKEN=$(op read "${args[$((i+1))]}") || { echo "Failed to read token from 1Password." >&2; exit 1; } ;;
     esac
 done
 
 if [[ -z "$TOKEN" ]]; then
-    echo "Missing GitLab token. Set GITLAB_TOKEN env var or use --token <token>." >&2
+    echo "Missing GitLab token. Use --gitlab-token <token> or --onepw-token-ref <op://vault/item/field>." >&2
     exit 1
 fi
 
