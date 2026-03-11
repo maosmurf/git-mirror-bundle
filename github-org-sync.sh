@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: ./github-org-sync.sh <org> [target-dir] [--dry-run]
+# Usage: ./github-org-sync.sh <org> [target-dir] [--dry-run] [--include-archived]
 # Requires: gh CLI (https://cli.github.com/) authenticated with `gh auth login`
 
 ORG="${1:?Usage: $0 <github-org> [target-dir] [--dry-run]}"
 TARGET_DIR="${2:-./providers}"
 DRY_RUN=false
 [[ "${*}" == *--dry-run* ]] && DRY_RUN=true
+INCLUDE_ARCHIVED=false
+[[ "${*}" == *--include-archived* ]] && INCLUDE_ARCHIVED=true
+
+GREEN='\033[0;32m'
+PURPLE='\033[0;35m'
+RESET='\033[0m'
 
 mkdir -p "$TARGET_DIR"
 
@@ -31,7 +37,9 @@ is_excluded() {
 }
 
 echo "Fetching repos for org: ${ORG}"
-mapfile -t REPOS < <(gh repo list "$ORG" --limit 1000 --json nameWithOwner,sshUrl --jq '.[].sshUrl')
+ARCHIVED_FLAG="--no-archived"
+$INCLUDE_ARCHIVED && ARCHIVED_FLAG=""
+mapfile -t REPOS < <(gh repo list "$ORG" --limit 1000 $ARCHIVED_FLAG --json nameWithOwner,sshUrl,isArchived --jq '.[].sshUrl')
 
 TOTAL="${#REPOS[@]}"
 if [[ "$TOTAL" -eq 0 ]]; then
@@ -56,10 +64,10 @@ for i in "${!REPOS[@]}"; do
     n=$((i + 1))
 
     if [[ -d "${dest}/.git" ]]; then
-        echo "[${n}/${TOTAL}] fetch ${name}"
+        echo -e "[${n}/${TOTAL}] ${PURPLE}fetch${RESET} ${name}"
         $DRY_RUN || git -C "$dest" fetch --all --quiet || { echo "  WARN: fetch failed, skipping"; (( ERRORS++ )) || true; }
     else
-        echo "[${n}/${TOTAL}] clone ${name}"
+        echo -e "[${n}/${TOTAL}] ${GREEN}clone${RESET} ${name}"
         $DRY_RUN || git clone --quiet "$url" "$dest" || { echo "  WARN: clone failed"; (( ERRORS++ )) || true; }
     fi
 done
