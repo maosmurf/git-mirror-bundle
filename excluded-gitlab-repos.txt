@@ -1,3 +1,6 @@
-# List of GitLab repos to exclude from syncing (one entry per line)
-# Match by repo name or relative path, e.g.: data-platform/trainer/anyline-studio
+# List of GitLab repos or subgroups to exclude from syncing (one entry per line)
+# Match by repo name, relative path, or subgroup prefix (excludes all repos underneath)
+#   data-platform/trainer/anyline-studio  → excludes one specific repo
+#   data-platform/trainer                 → excludes entire subgroup
+#   anyline-studio                        → excludes by repo name
 # Lines starting with # are ignored

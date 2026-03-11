@@ -45,13 +45,16 @@ for exclude_file in "$SCRIPT_DIR/excluded-gitlab-repos.txt" "$SCRIPT_DIR/exclude
     fi
 done
 
-# Matches against relative path (e.g. "data-platform/trainer/anyline-studio") or repo name
+# Matches against:
+#   - relative path  e.g. "data-platform/trainer/anyline-studio"
+#   - subgroup prefix e.g. "data-platform/trainer" (excludes all repos underneath)
+#   - repo name only  e.g. "anyline-studio"
 is_excluded() {
     local rel_path="$1"
     local name
     name=$(basename "$rel_path")
     for ex in "${EXCLUDED[@]}"; do
-        [[ "$rel_path" == "$ex" || "$name" == "$ex" ]] && return 0
+        [[ "$rel_path" == "$ex" || "$rel_path" == "$ex/"* || "$name" == "$ex" ]] && return 0
     done
     return 1
 }
