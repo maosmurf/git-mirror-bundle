@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: ./github-org-sync.sh <org> [target-dir] [--dry-run] [--include-archived] [-q|--quiet]
+# Usage: ./github-org-sync.sh <org> [target-dir] [--dry-run] [--archived] [-q|--quiet]
 # Requires: gh CLI (https://cli.github.com/) authenticated with `gh auth login`
 
 ORG="${1:?Usage: $0 <github-org> [target-dir] [--dry-run]}"
@@ -9,12 +9,13 @@ TARGET_DIR="${2:-./providers}"
 DRY_RUN=false
 [[ "${*}" == *--dry-run* ]] && DRY_RUN=true
 INCLUDE_ARCHIVED=false
-[[ "${*}" == *--include-archived* ]] && INCLUDE_ARCHIVED=true
+[[ "${*}" == *--archived* ]] && INCLUDE_ARCHIVED=true
 QUIET_FLAG=""
 [[ "${*}" == *--quiet* || "${*}" == *\ -q* ]] && QUIET_FLAG="--quiet"
 
 GREEN='\033[0;32m'
 PURPLE='\033[0;35m'
+YELLOW='\033[0;33m'
 RESET='\033[0m'
 
 mkdir -p "$TARGET_DIR"
@@ -41,7 +42,7 @@ is_excluded() {
 echo "Fetching repos for org: ${ORG}"
 ARCHIVED_FLAG="--no-archived"
 $INCLUDE_ARCHIVED && ARCHIVED_FLAG=""
-mapfile -t REPOS < <(gh repo list "$ORG" --limit 1000 $ARCHIVED_FLAG --json nameWithOwner,sshUrl,isArchived --jq '.[].sshUrl')
+mapfile -t REPOS < <(gh repo list "$ORG" --limit 1000 $ARCHIVED_FLAG --json sshUrl,diskUsage,isArchived --jq '.[] | .sshUrl + "|" + (.diskUsage | tostring) + "|" + (.isArchived | tostring)')
 
 TOTAL="${#REPOS[@]}"
 if [[ "$TOTAL" -eq 0 ]]; then
@@ -55,8 +56,10 @@ echo ""
 
 ERRORS=0
 for i in "${!REPOS[@]}"; do
-    url="${REPOS[$i]}"
+    IFS='|' read -r url disk_kb is_archived <<< "${REPOS[$i]}"
     name=$(basename "$url" .git)
+    archived_label=""
+    [[ "$is_archived" == "true" ]] && archived_label=" ${YELLOW}[archived]${RESET}"
 
     if is_excluded "$name"; then
         echo "[skip] ${name}"
@@ -66,10 +69,11 @@ for i in "${!REPOS[@]}"; do
     n=$((i + 1))
 
     if [[ -d "${dest}/.git" ]]; then
-        echo -e "[${n}/${TOTAL}] ${PURPLE}fetch${RESET} ${name}"
+        echo -e "[${n}/${TOTAL}] ${PURPLE}fetch${RESET} ${name}${archived_label}"
         $DRY_RUN || git -C "$dest" fetch --all $QUIET_FLAG || { echo "  WARN: fetch failed, skipping"; (( ERRORS++ )) || true; }
     else
-        echo -e "[${n}/${TOTAL}] ${GREEN}clone${RESET} ${name}"
+        size=$(numfmt --to=si --from-unit=1024 "$disk_kb" 2>/dev/null || echo "? KB")
+        echo -e "[${n}/${TOTAL}] ${GREEN}clone${RESET} ${name} (~${size})${archived_label}"
         $DRY_RUN || git clone $QUIET_FLAG "$url" "$dest" || { echo "  WARN: clone failed"; (( ERRORS++ )) || true; }
     fi
 done
