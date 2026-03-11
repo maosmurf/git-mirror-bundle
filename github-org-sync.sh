@@ -1,14 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: ./github-org-sync.sh <org> [provider-dir]
+# Usage: ./github-org-sync.sh <org> [target-dir]
 # Requires: gh CLI (https://cli.github.com/) authenticated with `gh auth login`
 
-ORG="${1:?Usage: $0 <github-org> [provider-dir]}"
-PROVIDER_DIR="${2:-./providers}"
-TARGET_DIR="${PROVIDER_DIR}/${ORG}"
+ORG="${1:?Usage: $0 <github-org> [target-dir]}"
+TARGET_DIR="${2:-./providers}"
 
 mkdir -p "$TARGET_DIR"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+EXCLUDED=()
+for exclude_file in "$SCRIPT_DIR/excluded-github-repos.txt" "$SCRIPT_DIR/excluded-github-repos.local.txt"; do
+    if [[ -f "$exclude_file" ]]; then
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            [[ -z "$line" || "$line" == \#* ]] && continue
+            EXCLUDED+=("$line")
+        done < "$exclude_file"
+    fi
+done
+
+is_excluded() {
+    local name="$1"
+    for ex in "${EXCLUDED[@]}"; do
+        [[ "$name" == "$ex" ]] && return 0
+    done
+    return 1
+}
 
 echo "Fetching repos for org: ${ORG}"
 mapfile -t REPOS < <(gh repo list "$ORG" --limit 1000 --json nameWithOwner,sshUrl --jq '.[].sshUrl')
@@ -26,12 +44,17 @@ ERRORS=0
 for i in "${!REPOS[@]}"; do
     url="${REPOS[$i]}"
     name=$(basename "$url" .git)
+
+    if is_excluded "$name"; then
+        echo "[skip] ${name}"
+        continue
+    fi
     dest="${TARGET_DIR}/${name}"
     n=$((i + 1))
 
     if [[ -d "${dest}/.git" ]]; then
         echo "[${n}/${TOTAL}] pull  ${name}"
-        git -C "$dest" pull --ff-only --quiet || { echo "  WARN: pull failed, skipping"; (( ERRORS++ )) || true; }
+        git -C "$dest" fetch --all --quiet || { echo "  WARN: fetch failed, skipping"; (( ERRORS++ )) || true; }
     else
         echo "[${n}/${TOTAL}] clone ${name}"
         git clone --quiet "$url" "$dest" || { echo "  WARN: clone failed"; (( ERRORS++ )) || true; }

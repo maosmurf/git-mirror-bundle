@@ -1,0 +1,2 @@
+# List of GitHub repos to exclude from syncing (one repo name per line)
+# Lines starting with # are ignored
