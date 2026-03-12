@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: ./gitlab-group-sync.sh <group> [target-dir] [--dry-run] [--archived] [-q|--quiet] [--host <host>] [--gitlab-token <token>|--onepw-token-ref <op://vault/item/field>]
-# Requires: curl, jq, git
+# Usage: ./gitlab-group-sync.sh <group> [target-dir] [--dry-run] [--archived] [-q|--quiet] [--host <host>]
+# Requires: glab (authenticated via `glab auth login`), jq, git
 
 GROUP="${1:?Usage: $0 <gitlab-group> [target-dir] [--dry-run] [--archived] [-q|--quiet]}"
 TARGET_DIR="${2:-./providers}"
@@ -14,20 +14,12 @@ QUIET_FLAG=""
 [[ "${*}" == *--quiet* || "${*}" == *\ -q* ]] && QUIET_FLAG="--quiet"
 
 GITLAB_HOST="gitlab.com"
-TOKEN=""
 args=("$@")
 for i in "${!args[@]}"; do
     case "${args[$i]}" in
-        --host)           GITLAB_HOST="${args[$((i+1))]}" ;;
-        --gitlab-token)   TOKEN="${args[$((i+1))]}" ;;
-        --onepw-token-ref) TOKEN=$(op read "${args[$((i+1))]}") || { echo "Failed to read token from 1Password." >&2; exit 1; } ;;
+        --host) GITLAB_HOST="${args[$((i+1))]}" ;;
     esac
 done
-
-if [[ -z "$TOKEN" ]]; then
-    echo "Missing GitLab token. Use --gitlab-token <token> or --onepw-token-ref <op://vault/item/field>." >&2
-    exit 1
-fi
 
 GREEN='\033[0;32m'
 PURPLE='\033[0;35m'
@@ -59,7 +51,6 @@ is_excluded() {
     return 1
 }
 
-API_BASE="https://${GITLAB_HOST}/api/v4"
 ENCODED_GROUP="${GROUP//\//%2F}"
 ARCHIVED_PARAM=""
 $INCLUDE_ARCHIVED || ARCHIVED_PARAM="&archived=false"
@@ -70,9 +61,9 @@ fetch_projects() {
     local page=1
     while true; do
         local batch
-        batch=$(curl -sf \
-            -H "PRIVATE-TOKEN: ${TOKEN}" \
-            "${API_BASE}/groups/${ENCODED_GROUP}/projects?include_subgroups=true&with_statistics=true&per_page=100&page=${page}${ARCHIVED_PARAM}" \
+        batch=$(glab api \
+            "groups/${ENCODED_GROUP}/projects?include_subgroups=true&per_page=100&page=${page}${ARCHIVED_PARAM}" \
+            --hostname "$GITLAB_HOST" \
         ) || { echo "GitLab API request failed" >&2; exit 1; }
 
         [[ $(echo "$batch" | jq 'length') -eq 0 ]] && break
@@ -81,7 +72,7 @@ fetch_projects() {
             --arg root "$GROUP" \
             '.[] | .ssh_url_to_repo
                  + "|" + (.path_with_namespace | ltrimstr($root + "/"))
-                 + "|" + ((.statistics.repository_size // 0) | tostring)
+                 + "|" + (.id | tostring)
                  + "|" + (.archived | tostring)'
 
         (( page++ ))
@@ -92,7 +83,7 @@ mapfile -t REPOS < <(fetch_projects)
 
 TOTAL="${#REPOS[@]}"
 if [[ "$TOTAL" -eq 0 ]]; then
-    echo "No projects found. Check the group name and your token permissions." >&2
+    echo "No projects found. Check the group name and your glab authentication (run: glab auth login --hostname ${GITLAB_HOST})." >&2
     exit 1
 fi
 
@@ -102,7 +93,7 @@ echo ""
 
 ERRORS=0
 for i in "${!REPOS[@]}"; do
-    IFS='|' read -r url rel_path size_bytes is_archived <<< "${REPOS[$i]}"
+    IFS='|' read -r url rel_path project_id is_archived <<< "${REPOS[$i]}"
     archived_label=""
     [[ "$is_archived" == "true" ]] && archived_label=" ${YELLOW}[archived]${RESET}"
     n=$((i + 1))
@@ -133,6 +124,7 @@ for i in "${!REPOS[@]}"; do
             git -C "$dest" fetch --all $QUIET_FLAG || { echo "  WARN: fetch failed, skipping"; (( ERRORS++ )) || true; }
         fi
     else
+        size_bytes=$(glab api "projects/${project_id}?statistics=true" --hostname "$GITLAB_HOST" | jq '.statistics.repository_size // 0')
         size=$(numfmt --to=si "$size_bytes" 2>/dev/null || echo "?")
         echo -e "[${n}/${TOTAL}] ${GREEN}clone${RESET} ${rel_path} (~${size})${archived_label}"
         $DRY_RUN || git clone $QUIET_FLAG "$url" "$dest" || { echo "  WARN: clone failed"; (( ERRORS++ )) || true; }
